@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "VIGEN: Video Generation Engine",
-  description: "VIGEN is video generation and schedular engine which creates video and schedul it for post",
+  description: "VIGEN is video generation and scheduler engine which creates video and schedul it for post",
 };
 
 export default function RootLayout({
