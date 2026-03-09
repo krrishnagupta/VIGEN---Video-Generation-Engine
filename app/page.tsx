@@ -1,8 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
-import { 
-  Video, CalendarDays, Mail, Instagram, Youtube, 
-  Sparkles, Zap, ArrowRight, Play, CheckCircle2, 
+import { auth } from "@clerk/nextjs/server";
+import { UserButton, SignInButton } from "@clerk/nextjs";
+import { syncUser } from "@/lib/sync-user";
+import {
+  Video, CalendarDays, Mail, Instagram, Youtube,
+  Sparkles, Zap, ArrowRight, Play, CheckCircle2,
   BarChart3, Clock, Layers, Star,
   Twitter, Linkedin, Github
 } from "lucide-react";
@@ -18,7 +21,14 @@ const TikTokIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const { userId } = await auth();
+  const isSignedIn = !!userId;
+
+  if (isSignedIn) {
+    await syncUser();
+  }
+
   return (
     <div className="min-h-screen bg-[#050510] text-zinc-100 font-sans selection:bg-purple-500/30 overflow-hidden">
       {/* Background Effects */}
@@ -33,13 +43,11 @@ export default function LandingPage() {
         {/* Navigation */}
         <header className="sticky top-0 z-50 border-b border-white/5 bg-[#050510]/80 backdrop-blur-md">
           <div className="container mx-auto px-4 lg:px-8 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
-                <Video className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-bold text-xl tracking-tight">VIGEN</span>
+            <div className="flex items-center gap-1">
+              <Image className="object-contain" src="/VIGEN_Icon.png" alt="VIGEN Logo" width={28} height={28} />
+              <span className="font-bold text-2xl tracking-tight">VIGEN</span>
             </div>
-            
+
             <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-zinc-400">
               <Link href="#features" className="hover:text-white transition-colors">Features</Link>
               <Link href="#how-it-works" className="hover:text-white transition-colors">How it Works</Link>
@@ -48,12 +56,28 @@ export default function LandingPage() {
             </nav>
 
             <div className="flex items-center gap-4">
-              <Link href="/login" className="hidden sm:block text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-                Sign in
-              </Link>
-              <Link href="/signup" className="h-9 px-4 rounded-full bg-white text-black text-sm font-medium flex items-center justify-center hover:bg-zinc-200 transition-colors">
-                Get Started
-              </Link>
+              {!isSignedIn ? (
+                <>
+                  <SignInButton mode="modal">
+                    <button className="hidden sm:block text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+                      Dashboard
+                    </button>
+                  </SignInButton>
+                  <Link href="/sign-in" className="hidden sm:block text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+                    Sign in
+                  </Link>
+                  <Link href="/sign-up" className="h-9 px-4 rounded-full bg-white text-black text-sm font-medium flex items-center justify-center hover:bg-zinc-200 transition-colors">
+                    Get Started
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link href="/dashboard" className="hidden sm:block text-sm font-medium text-zinc-300 hover:text-white transition-colors">
+                    Dashboard
+                  </Link>
+                  <UserButton />
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -66,27 +90,40 @@ export default function LandingPage() {
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Vigen 2.0 is now live</span>
               </div>
-              
+
               <h1 className="text-5xl lg:text-7xl font-bold tracking-tight mb-6 max-w-4xl mx-auto leading-[1.1]">
                 Generate & Schedule <br className="hidden lg:block" />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400">
                   AI Viral Short Videos
                 </span>
               </h1>
-              
+
               <p className="text-lg lg:text-xl text-zinc-400 mb-10 max-w-2xl mx-auto leading-relaxed">
                 The ultimate SaaS platform to automatically craft stunning short-form content and schedule it perfectly across YouTube, Instagram, TikTok, and Email.
               </p>
-              
+
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link href="/signup" className="h-12 px-8 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium flex items-center gap-2 hover:opacity-90 transition-opacity w-full sm:w-auto justify-center shadow-[0_0_30px_-5px_rgba(147,51,234,0.5)]">
-                  Start Creating for Free <ArrowRight className="w-4 h-4" />
-                </Link>
+                {!isSignedIn ? (
+                  <>
+                    <Link href="/sign-up" className="h-12 px-8 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium flex items-center gap-2 hover:opacity-90 transition-opacity w-full sm:w-auto justify-center shadow-[0_0_30px_-5px_rgba(147,51,234,0.5)]">
+                      Start Creating for Free <ArrowRight className="w-4 h-4" />
+                    </Link>
+                    <SignInButton mode="modal">
+                      <button className="h-12 px-8 rounded-full bg-white/5 text-white font-medium flex items-center gap-2 hover:bg-white/10 transition-colors border border-white/10 w-full sm:w-auto justify-center">
+                        Dashboard <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </SignInButton>
+                  </>
+                ) : (
+                  <Link href="/dashboard" className="h-12 px-8 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium flex items-center gap-2 hover:opacity-90 transition-opacity w-full sm:w-auto justify-center shadow-[0_0_30px_-5px_rgba(147,51,234,0.5)]">
+                    Go to Dashboard <ArrowRight className="w-4 h-4" />
+                  </Link>
+                )}
                 <button className="h-12 px-8 rounded-full bg-white/5 text-white font-medium flex items-center gap-2 hover:bg-white/10 transition-colors border border-white/10 w-full sm:w-auto justify-center">
                   <Play className="w-4 h-4 fill-white flex-shrink-0" /> Watch Demo
                 </button>
               </div>
-              
+
               <div className="mt-12 flex items-center justify-center gap-4 text-sm text-zinc-500 font-medium">
                 <div className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> No credit card required</div>
                 <div className="hidden sm:flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> 14-day free trial</div>
@@ -108,7 +145,7 @@ export default function LandingPage() {
                     <div className="w-64 border-r border-white/5 p-4 hidden md:block">
                       <div className="h-8 w-32 bg-white/5 rounded-md mb-8"></div>
                       <div className="space-y-3">
-                        {[1,2,3,4,5].map(i => <div key={i} className="h-6 w-full bg-white/5 rounded-md"></div>)}
+                        {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-6 w-full bg-white/5 rounded-md"></div>)}
                       </div>
                     </div>
                     <div className="flex-1 p-8 grid grid-cols-3 gap-6">
@@ -204,33 +241,33 @@ export default function LandingPage() {
                       <h3 className="text-2xl font-semibold mb-3">Save 20+ Hours Weekly</h3>
                       <p className="text-zinc-400 leading-relaxed">Content creators and marketers spend an average of 4 hours per video. Vigen reduces that to 4 minutes.</p>
                       <ul className="mt-6 space-y-2">
-                        <li className="flex items-center gap-2 text-sm text-zinc-300"><CheckCircle2 className="w-4 h-4 text-orange-400"/> No editing skills required</li>
-                        <li className="flex items-center gap-2 text-sm text-zinc-300"><CheckCircle2 className="w-4 h-4 text-orange-400"/> Infinite content library</li>
-                        <li className="flex items-center gap-2 text-sm text-zinc-300"><CheckCircle2 className="w-4 h-4 text-orange-400"/> Automated trend spotting</li>
+                        <li className="flex items-center gap-2 text-sm text-zinc-300"><CheckCircle2 className="w-4 h-4 text-orange-400" /> No editing skills required</li>
+                        <li className="flex items-center gap-2 text-sm text-zinc-300"><CheckCircle2 className="w-4 h-4 text-orange-400" /> Infinite content library</li>
+                        <li className="flex items-center gap-2 text-sm text-zinc-300"><CheckCircle2 className="w-4 h-4 text-orange-400" /> Automated trend spotting</li>
                       </ul>
                     </div>
                     <div className="bg-black/50 rounded-xl p-4 border border-white/10 h-full flex flex-col justify-center">
-                       <div className="flex items-center justify-between mb-4">
-                         <span className="text-xs font-medium text-zinc-500">Upcoming Posts</span>
-                         <span className="text-xs text-purple-400 font-medium">+ Add New</span>
-                       </div>
-                       <div className="space-y-3">
-                         <div className="h-12 bg-white/5 rounded-lg border border-white/5 flex items-center px-3 gap-3">
-                           <Youtube className="w-4 h-4 text-red-500" />
-                           <div className="h-2 w-24 bg-white/20 rounded"></div>
-                           <div className="h-4 w-12 bg-purple-500/20 text-purple-400 text-[10px] rounded flex items-center justify-center ml-auto">Scheduled</div>
-                         </div>
-                         <div className="h-12 bg-white/5 rounded-lg border border-white/5 flex items-center px-3 gap-3">
-                           <Instagram className="w-4 h-4 text-pink-500" />
-                           <div className="h-2 w-32 bg-white/20 rounded"></div>
-                           <div className="h-4 w-12 bg-blue-500/20 text-blue-400 text-[10px] rounded flex items-center justify-center ml-auto">Generating</div>
-                         </div>
-                         <div className="h-12 bg-white/5 rounded-lg border border-white/5 flex items-center px-3 gap-3">
-                           <TikTokIcon className="w-4 h-4 text-white" />
-                           <div className="h-2 w-20 bg-white/20 rounded"></div>
-                           <div className="h-4 w-12 bg-zinc-500/20 text-zinc-400 text-[10px] rounded flex items-center justify-center ml-auto">Draft</div>
-                         </div>
-                       </div>
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-xs font-medium text-zinc-500">Upcoming Posts</span>
+                        <span className="text-xs text-purple-400 font-medium">+ Add New</span>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="h-12 bg-white/5 rounded-lg border border-white/5 flex items-center px-3 gap-3">
+                          <Youtube className="w-4 h-4 text-red-500" />
+                          <div className="h-2 w-24 bg-white/20 rounded"></div>
+                          <div className="h-4 w-12 bg-purple-500/20 text-purple-400 text-[10px] rounded flex items-center justify-center ml-auto">Scheduled</div>
+                        </div>
+                        <div className="h-12 bg-white/5 rounded-lg border border-white/5 flex items-center px-3 gap-3">
+                          <Instagram className="w-4 h-4 text-pink-500" />
+                          <div className="h-2 w-32 bg-white/20 rounded"></div>
+                          <div className="h-4 w-12 bg-blue-500/20 text-blue-400 text-[10px] rounded flex items-center justify-center ml-auto">Generating</div>
+                        </div>
+                        <div className="h-12 bg-white/5 rounded-lg border border-white/5 flex items-center px-3 gap-3">
+                          <TikTokIcon className="w-4 h-4 text-white" />
+                          <div className="h-2 w-20 bg-white/20 rounded"></div>
+                          <div className="h-4 w-12 bg-zinc-500/20 text-zinc-400 text-[10px] rounded flex items-center justify-center ml-auto">Draft</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -289,9 +326,15 @@ export default function LandingPage() {
                 <p className="text-xl text-purple-200/70 mb-10 max-w-2xl mx-auto">
                   Join 10,000+ creators and brands who are scaling their reach without scaling their effort.
                 </p>
-                <Link href="/signup" className="inline-flex h-14 px-10 rounded-full bg-white text-black font-semibold text-lg items-center gap-2 hover:bg-zinc-200 transition-colors shadow-lg">
-                  Start Your Free Trial <ArrowRight className="w-5 h-5" />
-                </Link>
+                {!isSignedIn ? (
+                  <Link href="/sign-up" className="inline-flex h-14 px-10 rounded-full bg-white text-black font-semibold text-lg items-center gap-2 hover:bg-zinc-200 transition-colors shadow-lg">
+                    Start Your Free Trial <ArrowRight className="w-5 h-5" />
+                  </Link>
+                ) : (
+                  <Link href="/dashboard" className="inline-flex h-14 px-10 rounded-full bg-white text-black font-semibold text-lg items-center gap-2 hover:bg-zinc-200 transition-colors shadow-lg">
+                    Back to Dashboard <ArrowRight className="w-5 h-5" />
+                  </Link>
+                )}
                 <p className="mt-6 text-sm text-purple-200/50">14-day free trial. Cancel anytime.</p>
               </div>
             </div>
