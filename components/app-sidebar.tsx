@@ -44,10 +44,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <span className="text-xl font-bold tracking-tight text-zinc-900">VIGEN</span>
         </div>
         <div className="mt-6 px-2">
-          <Button variant="default" className="w-full justify-start gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 text-white font-medium h-11 rounded-xl shadow-sm">
-            <Plus className="h-5 w-5" />
-            <span>Create New Series</span>
-          </Button>
+          <Link href="/dashboard/create" className="block w-full">
+            <Button variant="default" className="w-full justify-start gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 text-white font-medium h-11 rounded-xl shadow-sm">
+              <Plus className="h-5 w-5" />
+              <span>Create New Series</span>
+            </Button>
+          </Link>
         </div>
       </SidebarHeader>
       <SidebarContent className="px-2 mt-4">
