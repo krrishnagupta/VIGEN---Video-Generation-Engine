@@ -1,11 +1,11 @@
 import { currentUser } from "@clerk/nextjs/server";
-import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 
 export async function syncUser() {
   const user = await currentUser();
   if (!user) return null;
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Check if user already exists
   const { data: existingUser } = await supabase

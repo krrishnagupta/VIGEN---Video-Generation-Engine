@@ -31,20 +31,29 @@ export default async function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#050510] text-zinc-100 font-sans selection:bg-purple-500/30 overflow-hidden">
-      {/* Background Effects */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-purple-900/20 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-900/20 blur-[120px]" />
-        <div className="absolute top-[40%] left-[60%] w-[30%] h-[30%] rounded-full bg-pink-900/10 blur-[100px]" />
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+      {/* Premium Background Effects */}
+      <div className="fixed inset-0 z-0 pointer-events-none bg-[#050510]">
+        {/* Top Spotlight */}
+        <div className="absolute top-0 inset-x-0 h-[500px] bg-gradient-to-b from-purple-900/20 via-transparent to-transparent"></div>
+        
+        {/* Grid Pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_110%)]"></div>
+
+        {/* Dynamic Glowing Orbs */}
+        <div className="absolute top-[-20%] left-[-10%] w-[70vw] h-[70vw] max-w-[800px] max-h-[800px] rounded-full bg-purple-600/10 blur-[130px] mix-blend-screen" />
+        <div className="absolute top-[20%] right-[-10%] w-[60vw] h-[60vw] max-w-[600px] max-h-[600px] rounded-full bg-blue-600/10 blur-[130px] mix-blend-screen" />
+        <div className="absolute bottom-[-20%] left-[20%] w-[80vw] h-[80vw] max-w-[1000px] max-h-[1000px] rounded-full bg-pink-500/5 blur-[150px] mix-blend-screen" />
+        
+        {/* Cinematic Noise Texture */}
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.03] mix-blend-overlay"></div>
       </div>
 
       <div className="relative z-10">
         {/* Navigation */}
-        <header className="sticky top-0 z-50 border-b border-white/5 bg-[#050510]/80 backdrop-blur-md">
+        <header className="sticky top-0 z-50 border-b border-white/5 bg-[#050510]/20 backdrop-blur-lg">
           <div className="container mx-auto px-4 lg:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <Image className="object-contain" src="/VIGEN_Icon.png" alt="VIGEN Logo" width={28} height={28} />
+              <Image className="object-contain" src="/VIGEN_Icon.png" alt="VIGEN Logo" width={28} height={28} style={{ width: 28, height: 28 }} />
               <span className="font-bold text-2xl tracking-tight">VIGEN</span>
             </div>
 

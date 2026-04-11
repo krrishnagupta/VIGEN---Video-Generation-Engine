@@ -152,11 +152,11 @@ export function LanguageVoiceSelection({
                   const isPlaying = playingId === voice.id
 
                   return (
-                    <button
+                    <div
                       key={voice.id}
                       onClick={() => onUpdate({ voiceId: voice.id })}
                       className={cn(
-                        "group relative flex flex-col p-4 rounded-2xl border transition-all text-left",
+                        "group relative flex flex-col p-4 rounded-2xl border transition-all text-left cursor-pointer",
                         isSelected 
                           ? "border-purple-600 bg-purple-50/50 ring-1 ring-purple-600" 
                           : "border-zinc-100 bg-white hover:border-zinc-200 hover:shadow-sm"
@@ -232,7 +232,7 @@ export function LanguageVoiceSelection({
                            ))}
                         </div>
                       )}
-                    </button>
+                    </div>
                   )
                 })}
               </div>
