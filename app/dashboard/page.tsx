@@ -1,5 +1,7 @@
 import { currentUser } from "@clerk/nextjs/server"
 import { syncUser } from "@/lib/sync-user"
+import Link from "next/link"
+import { SeriesList } from "@/components/dashboard/series-list"
 import { 
   Plus, 
   Video, 
@@ -24,10 +26,12 @@ export default async function DashboardPage() {
             Here's what's happening with your video series today.
           </p>
         </div>
-        <button className="h-11 px-6 rounded-xl bg-zinc-900 text-white font-medium flex items-center gap-2 hover:bg-zinc-800 transition-colors shadow-sm">
-          <Plus className="h-5 w-5" />
-          <span>New Video</span>
-        </button>
+        <Link href="/dashboard/create">
+          <button className="h-11 px-6 rounded-xl bg-zinc-900 text-white font-medium flex items-center gap-2 hover:bg-zinc-800 transition-colors shadow-sm">
+            <Plus className="h-5 w-5" />
+            <span>New Video</span>
+          </button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -73,20 +77,7 @@ export default async function DashboardPage() {
 
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-zinc-900">Recent Projects</h2>
-        <div className="rounded-2xl border border-zinc-100 bg-white shadow-sm overflow-hidden">
-          <div className="p-8 text-center py-20">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-50 border border-dashed border-zinc-200 flex items-center justify-center mx-auto mb-4">
-              <Play className="h-6 w-6 text-zinc-300" />
-            </div>
-            <h3 className="text-lg font-semibold text-zinc-900">Start your first video series</h3>
-            <p className="text-zinc-500 max-w-xs mx-auto mt-2">
-              Generate AI-powered short videos and schedule them across your channels automatically.
-            </p>
-            <button className="mt-8 h-10 px-6 rounded-lg bg-zinc-100 text-zinc-900 font-medium hover:bg-zinc-200 transition-colors">
-              Get Started Guide
-            </button>
-          </div>
-        </div>
+        <SeriesList />
       </div>
     </div>
   )

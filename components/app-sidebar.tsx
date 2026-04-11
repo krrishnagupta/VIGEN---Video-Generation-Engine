@@ -39,7 +39,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-1 px-2">
           <div className="relative w-8 h-8 overflow-hidden rounded-lg">
-            <Image src="/VIGEN_Icon.png" alt="VIGEN Logo" className="object-contain" fill />
+            <Image src="/VIGEN_Icon.png" alt="VIGEN Logo" className="object-contain" fill sizes="32px" />
           </div>
           <span className="text-xl font-bold tracking-tight text-zinc-900">VIGEN</span>
         </div>
