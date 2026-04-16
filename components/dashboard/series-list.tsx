@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useRef } from "react";
 import { VIDEO_STYLES } from "@/lib/constants/video-style-data";
-import { MoreVertical, Edit2, Play, Calendar, PlayCircle, Eye, Pause, Trash2 } from "lucide-react";
+import { MoreVertical, Edit2, Play, Calendar, PlayCircle, Eye, Pause, Trash2, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface Series {
   id: string;
@@ -18,6 +19,8 @@ export function SeriesList() {
   const [seriesList, setSeriesList] = useState<Series[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const router = useRouter();
 
   // Popover state
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -198,12 +201,40 @@ export function SeriesList() {
               </div>
 
               <div className="mt-auto pt-6 space-y-3">
-                <button className="w-full flex items-center justify-center gap-2 h-10 rounded-xl bg-purple-50 text-purple-700 font-medium text-sm hover:bg-purple-100 transition-colors border border-purple-100">
-                  <Play className="w-4 h-4 fill-purple-700" /> Trigger Generation
+                <button 
+                  disabled={generatingId === series.id}
+                  onClick={async () => {
+                    try {
+                      setGeneratingId(series.id);
+                      const res = await fetch(`/api/series/${series.id}/generate`, { method: 'POST' });
+                      const data = await res.json();
+                      if (data.success) {
+                        router.refresh();
+                        router.push('/dashboard/videos');
+                      } else {
+                        alert('Failed to trigger generation');
+                      }
+                    } catch (err) {
+                      console.error('Error triggering generation', err);
+                      alert('Error triggering generation');
+                    } finally {
+                      setGeneratingId(null);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 h-10 rounded-xl bg-purple-50 text-purple-700 font-medium text-sm hover:bg-purple-100 transition-colors border border-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {generatingId === series.id ? (
+                    <Loader2 className="w-4 h-4 text-purple-700 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4 fill-purple-700" />
+                  )}
+                  {generatingId === series.id ? "Triggering..." : "Trigger Generation"}
                 </button>
-                <button className="w-full flex items-center justify-center gap-2 h-10 rounded-xl bg-white text-zinc-600 font-medium text-sm hover:bg-zinc-50 transition-colors border border-zinc-200">
-                  <Eye className="w-4 h-4" /> View Generated Videos
-                </button>
+                <Link href="/dashboard/videos" className="w-full">
+                  <button className="w-full flex items-center justify-center gap-2 h-10 rounded-xl bg-white text-zinc-600 font-medium text-sm hover:bg-zinc-50 transition-colors border border-zinc-200">
+                    <Eye className="w-4 h-4" /> View Generated Videos
+                  </button>
+                </Link>
               </div>
             </div>
           </div>
