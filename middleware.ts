@@ -4,7 +4,8 @@ import { updateSession } from '@/utils/supabase/middleware'
 const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
-  '/sign-up(.*)'
+  '/sign-up(.*)',
+  '/api/inngest'
 ])
 
 export const proxy = clerkMiddleware(async (auth, request) => {

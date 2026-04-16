@@ -1,6 +1,9 @@
+"use client"
+
 import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { usePathname } from "next/navigation"
 import {
   Layers,
   Video,
@@ -26,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button"
 
 const menuItems = [
-  { title: "Series", icon: Layers, url: "/dashboard/series" },
+  { title: "Series", icon: Layers, url: "/dashboard" },
   { title: "Videos", icon: Video, url: "/dashboard/videos" },
   { title: "Guides", icon: BookOpen, url: "/dashboard/guides" },
   { title: "Billing", icon: CreditCard, url: "/dashboard/billing" },
@@ -34,6 +37,8 @@ const menuItems = [
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname()
+
   return (
     <Sidebar variant="sidebar" className="border-r border-zinc-200 bg-white" {...props}>
       <SidebarHeader className="p-4">
@@ -56,20 +61,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    size="lg"
-                    className="text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors my-1 px-4"
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="h-5 w-5 mr-3" />
-                      <span className="text-base font-medium">{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {menuItems.map((item) => {
+                const isActive = item.url === "/dashboard"
+                  ? pathname === "/dashboard"
+                  : pathname?.startsWith(item.url)
+
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      size="lg"
+                      isActive={isActive}
+                      className={`transition-all my-1 px-4 border ${isActive
+                        ? "border-violet-900 bg-violet-100 text-zinc-900 font-semibold shadow-sm"
+                        : "border-transparent text-zinc-600 hover:bg-violet-100 hover:border-violet-200 hover:text-violet-900"
+                        }`}
+                    >
+                      <Link href={item.url}>
+                        <item.icon className="h-5 w-5 mr-3" />
+                        <span className="text-base font-medium">{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -80,7 +95,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton
               asChild
               size="lg"
-              className="text-zinc-600 hover:bg-zinc-100 hover:text-orange-600 transition-colors my-1 px-4"
+              isActive={pathname?.startsWith("/dashboard/upgrade")}
+              className={`transition-all my-1 px-4 border ${pathname?.startsWith("/dashboard/upgrade")
+                ? "border-orange-200 bg-orange-50 text-orange-700 font-semibold shadow-sm"
+                : "border-transparent text-zinc-600 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600"
+                }`}
             >
               <Link href="/dashboard/upgrade">
                 <Zap className="h-5 w-5 mr-3 text-orange-500" />
@@ -92,7 +111,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton
               asChild
               size="lg"
-              className="text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 transition-colors my-1 px-4"
+              isActive={pathname?.startsWith("/dashboard/settings")}
+              className={`transition-all my-1 px-4 border ${pathname?.startsWith("/dashboard/settings")
+                ? "border-violet-900 bg-violet-100 text-zinc-900 font-semibold shadow-sm"
+                : "border-transparent text-zinc-600 hover:bg-violet-100 hover:border-violet-200 hover:text-violet-900"
+                }`}
             >
               <Link href="/dashboard/settings">
                 <User className="h-5 w-5 mr-3" />
