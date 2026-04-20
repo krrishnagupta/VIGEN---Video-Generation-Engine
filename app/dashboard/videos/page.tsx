@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { Video, Calendar, Eye, Download, PlayCircle, Loader2 } from "lucide-react";
+import { Video, Calendar, Eye, Download, PlayCircle, Loader2, FileEdit } from "lucide-react";
+import Link from "next/link";
 
 interface VideoAsset {
   image_url: string | null;
@@ -134,9 +135,11 @@ export default function VideosPage() {
                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border shadow-sm ${
                        isGenerating 
                          ? 'bg-purple-100 text-purple-700 border-purple-200'
-                         : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                         : video.status === 'pending_review' 
+                           ? 'bg-orange-100 text-orange-700 border-orange-200'
+                           : 'bg-emerald-100 text-emerald-700 border-emerald-200'
                      }`}>
-                        {video.status}
+                        {video.status.replace('_', ' ')}
                      </span>
                   </div>
                 </div>
@@ -152,14 +155,22 @@ export default function VideosPage() {
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-zinc-100 flex items-center justify-between gap-2">
+                    {video.status === 'pending_review' ? (
+                      <Link href={`/dashboard/videos/${video.id}/review`} className="flex-1">
+                        <button className="w-full flex items-center justify-center gap-2 h-9 rounded-lg bg-orange-50 text-orange-700 font-medium text-xs hover:bg-orange-100 transition-colors border border-orange-200">
+                          <FileEdit className="w-3.5 h-3.5" /> Review
+                        </button>
+                      </Link>
+                    ) : (
+                      <button 
+                         disabled={isGenerating}
+                         className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg bg-zinc-900 text-white font-medium text-xs hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                       >
+                         <Eye className="w-3.5 h-3.5" /> View
+                      </button>
+                    )}
                     <button 
-                       disabled={isGenerating}
-                       className="flex-1 flex items-center justify-center gap-2 h-9 rounded-lg bg-zinc-900 text-white font-medium text-xs hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                     >
-                       <Eye className="w-3.5 h-3.5" /> View
-                    </button>
-                    <button 
-                       disabled={isGenerating}
+                       disabled={isGenerating || video.status === 'pending_review'}
                        className="p-2 h-9 w-9 flex items-center justify-center rounded-lg bg-white border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                      >
                        <Download className="w-3.5 h-3.5" />

@@ -3,13 +3,14 @@ export const dynamic = "force-dynamic";
 
 import { serve } from "inngest/next";
 import { inngest } from "@/lib/inngest/client";
-import { helloWorld, generateVideo } from "@/lib/inngest/functions";
+import { helloWorld, generateVideo, generateFinalVideo } from "@/lib/inngest/functions";
 
 // Create an API that serves zero-downtime background functions mapping our exports universally
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
     helloWorld,
-    generateVideo
+    generateVideo,
+    generateFinalVideo
   ]
 });
