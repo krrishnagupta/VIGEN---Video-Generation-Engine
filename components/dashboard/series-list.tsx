@@ -31,7 +31,7 @@ export function SeriesList() {
       try {
         const response = await fetch('/api/series');
         const data = await response.json();
-        
+
         if (data.success) {
           setSeriesList(data.data);
         } else {
@@ -54,7 +54,7 @@ export function SeriesList() {
         setActiveMenuId(null);
       }
     }
-    
+
     // Bind the event listener
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
@@ -72,7 +72,7 @@ export function SeriesList() {
         body: JSON.stringify({ id, status: newStatus }),
       });
       const data = await response.json();
-      
+
       if (data.success) {
         setSeriesList(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
       }
@@ -126,18 +126,18 @@ export function SeriesList() {
 
         return (
           <div key={series.id} className="group flex flex-col bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow relative">
-            
+
             {/* Thumbnail Header */}
             <div className="relative aspect-video w-full bg-zinc-100 overflow-hidden">
-              <img 
-                src={imageUrl} 
-                alt={series.series_name || 'Series Thumbnail'} 
+              <img
+                src={imageUrl}
+                alt={series.series_name || 'Series Thumbnail'}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-              
+
               {/* Top Right Edit Button */}
-              <Link 
+              <Link
                 href={`/dashboard/series/${series.id}/edit`}
                 className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/60 transition-colors border border-white/10"
                 title="Edit Series"
@@ -146,9 +146,9 @@ export function SeriesList() {
               </Link>
 
               <div className="absolute bottom-3 left-4">
-                 <span className="px-2.5 py-1 rounded-md bg-black/40 backdrop-blur-md text-white text-xs font-medium border border-white/10 capitalize">
-                    {series.status || 'Active'}
-                 </span>
+                <span className="px-2.5 py-1 rounded-md bg-black/40 backdrop-blur-md text-white text-xs font-medium border border-white/10 capitalize">
+                  {series.status || 'Active'}
+                </span>
               </div>
             </div>
 
@@ -171,7 +171,7 @@ export function SeriesList() {
 
                 {/* Popover Menu Trigger */}
                 <div className="relative" ref={activeMenuId === series.id ? menuRef : null}>
-                  <button 
+                  <button
                     onClick={() => setActiveMenuId(activeMenuId === series.id ? null : series.id)}
                     className="p-1.5 text-zinc-400 hover:text-zinc-600 rounded-md hover:bg-zinc-100 transition-colors"
                   >
@@ -184,11 +184,11 @@ export function SeriesList() {
                       <Link href={`/dashboard/series/${series.id}/edit`} className="w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 flex items-center gap-2">
                         <Edit2 className="w-4 h-4" /> Edit Series
                       </Link>
-                      <button 
+                      <button
                         className="w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 flex items-center gap-2"
                         onClick={() => handleToggleStatus(series.id, series.status)}
                       >
-                        {series.status === 'paused' ? <PlayCircle className="w-4 h-4" /> : <Pause className="w-4 h-4" />} 
+                        {series.status === 'paused' ? <PlayCircle className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
                         {series.status === 'paused' ? 'Resume' : 'Pause'}
                       </button>
                       <div className="h-px bg-zinc-100 my-1.5"></div>
@@ -201,7 +201,7 @@ export function SeriesList() {
               </div>
 
               <div className="mt-auto pt-6 space-y-3">
-                <button 
+                <button
                   disabled={generatingId === series.id}
                   onClick={async () => {
                     try {
@@ -210,7 +210,7 @@ export function SeriesList() {
                       const data = await res.json();
                       if (data.success) {
                         router.refresh();
-                        router.push('/dashboard/videos');
+                        router.push(`/dashboard/videos/${data.videoId}/review`);
                       } else {
                         alert('Failed to trigger generation');
                       }

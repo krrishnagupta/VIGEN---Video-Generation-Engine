@@ -323,39 +323,71 @@ Return ONLY JSON. No extra text under any condition.`;
       for (const sceneInfo of scriptData.scenes) {
         if (!sceneInfo.image_prompt) continue;
 
-        const output: any = await replicate.run(
-          "bytedance/sdxl-lightning-4step:6f7a773af6fc3e8de9d5a3c00be77c17308914bf67772726aff83496ba1e3bbe",
-          {
-            input: {
-              prompt: sceneInfo.image_prompt,
-              num_outputs: 1,
-              scheduler: "K_EULER",
-              num_inference_steps: 4,
-              guidance_scale: 0
-            }
-          }
-        );
+        let imageBuffer: ArrayBuffer | null = null;
+        let lastError: any = null;
 
-        let imageBuffer: ArrayBuffer;
-        if (typeof output[0].arrayBuffer === 'function') {
-          imageBuffer = await output[0].arrayBuffer();
-        } else {
-          // Fallback if returned value is just a URL string
-          const res = await fetch(typeof output[0] === 'string' ? output[0] : output[0].url());
-          imageBuffer = await res.arrayBuffer();
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log(`Generating image for scene ${sceneInfo.scene}, attempt ${attempt}`);
+            const output: any = await replicate.run(
+              "bytedance/sdxl-lightning-4step:6f7a773af6fc3e8de9d5a3c00be77c17308914bf67772726aff83496ba1e3bbe",
+              {
+                input: {
+                  prompt: sceneInfo.image_prompt,
+                  num_outputs: 1,
+                  scheduler: "K_EULER",
+                  num_inference_steps: 4,
+                  guidance_scale: 0
+                }
+              }
+            );
+
+            if (typeof output[0].arrayBuffer === 'function') {
+              imageBuffer = await output[0].arrayBuffer();
+            } else {
+              const res = await fetch(typeof output[0] === 'string' ? output[0] : output[0].url());
+              imageBuffer = await res.arrayBuffer();
+            }
+            break; // success
+          } catch (err) {
+            lastError = err;
+            console.error(`Replicate image generation attempt ${attempt} failed:`, err);
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          }
+        }
+
+        if (!imageBuffer) {
+          throw new Error(`Failed to generate image after 3 attempts: ${lastError?.message}`);
         }
 
         const fileName = `${event.data.seriesId}/scene-${sceneInfo.scene}-img-${Date.now()}.png`;
-        const { error: uploadError } = await supabase
-          .storage
-          .from('series_assets')
-          .upload(fileName, imageBuffer, {
-            contentType: 'image/png',
-            upsert: true
-          });
+        let uploadSuccess = false;
+        
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log(`Uploading image for scene ${sceneInfo.scene}, attempt ${attempt}`);
+            const { error: uploadError } = await supabase
+              .storage
+              .from('series_assets')
+              .upload(fileName, imageBuffer, {
+                contentType: 'image/png',
+                upsert: true
+              });
 
-        if (uploadError) {
-          throw new Error(`Failed to upload image to Supabase Storage: ${uploadError.message}`);
+            if (uploadError) {
+              throw new Error(uploadError.message);
+            }
+            uploadSuccess = true;
+            break;
+          } catch (err) {
+            lastError = err;
+            console.error(`Supabase upload attempt ${attempt} failed:`, err);
+            await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+          }
+        }
+
+        if (!uploadSuccess) {
+          throw new Error(`Failed to upload image to Supabase Storage after 3 attempts: ${lastError?.message}`);
         }
 
         const { data: publicUrlData } = supabase.storage.from('series_assets').getPublicUrl(fileName);
@@ -378,7 +410,7 @@ Return ONLY JSON. No extra text under any condition.`;
         .from('videos')
         .update({
           title: scriptData.title,
-          status: 'completed'
+          status: 'pending_review'
         })
         .eq('id', event.data.videoId)
         .select()
@@ -425,3 +457,304 @@ Return ONLY JSON. No extra text under any condition.`;
     };
   }
 );
+
+export const generateFinalVideo = inngest.createFunction(
+  { id: "generate-final-video", triggers: [{ event: "video/generate-final" }] },
+  async ({ event, step }) => {
+    // 1. Mark status as "generating_video"
+    await step.run("update-status-to-generating", async () => {
+      const supabase = createAdminClient();
+      await supabase
+        .from('videos')
+        .update({ status: 'generating_video' })
+        .eq('id', event.data.videoId);
+    });
+
+    // 2. Fetch video assets
+    const assets = await step.run("fetch-video-assets", async () => {
+      const supabase = createAdminClient();
+      const { data, error } = await supabase
+        .from('video_assets')
+        .select('*')
+        .eq('video_id', event.data.videoId)
+        .order('scene_number', { ascending: true });
+        
+      if (error) throw new Error("Failed to fetch video assets");
+      return data;
+    });
+
+    // 3. Process WAN generation
+    const processedData = await step.run("process-wan-generation", async () => {
+      const supabase = createAdminClient();
+      const Replicate = (await import('replicate')).default;
+      const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+
+      const finalScenes = [];
+      const FPS = 30;
+      let globalStartFrame = 0;
+
+      for (let i = 0; i < assets.length; i++) {
+        const asset = assets[i];
+        
+        let type = 'fallback';
+        let wanVideoUrl: string | null = null;
+
+        // Select scenes for WAN (e.g., alternating scenes starting with the first one)
+        const shouldUseWan = i % 2 === 0;
+
+        if (shouldUseWan && asset.image_url) {
+          try {
+            console.log(`Generating WAN video for scene ${asset.scene_number}`);
+            
+            // Generate video via Replicate using the specified model and options
+            const output: any = await replicate.run(
+              "wan-video/wan-2.2-i2v-fast",
+              {
+                input: {
+                  image: asset.image_url,
+                  prompt: asset.script_text || "Cinematic motion scene",
+                  variant: "base",
+                  target_resolution: "480"
+                }
+              }
+            );
+            
+            const videoUrl = Array.isArray(output) ? output[0] : output;
+            
+            if (typeof videoUrl === 'string') {
+              // Upload to Supabase Storage
+              const res = await fetch(videoUrl);
+              const buffer = await res.arrayBuffer();
+              const fileName = `final/${event.data.videoId}/scene-${asset.scene_number}-wan-${Date.now()}.mp4`;
+              
+              await supabase.storage.from('series_assets').upload(fileName, buffer, { contentType: 'video/mp4' });
+              
+              const { data: publicUrlData } = supabase.storage.from('series_assets').getPublicUrl(fileName);
+              wanVideoUrl = publicUrlData.publicUrl;
+              type = 'wan';
+              console.log(`WAN video success: ${wanVideoUrl}`);
+            }
+          } catch (error) {
+            console.error(`WAN generation failed for scene ${asset.scene_number}`, error);
+            type = 'fallback'; 
+          }
+        }
+        
+        // Calculate scene duration. Find audio duration using captions, or fallback to 5s
+        let durationInSeconds = 5;
+        if (asset.captions_json && Array.isArray(asset.captions_json) && asset.captions_json.length > 0) {
+          const sortedCaptions = [...asset.captions_json].sort((a: any, b: any) => a.end - b.end);
+          const lastWord = sortedCaptions[sortedCaptions.length - 1];
+          // Pad the end of audio slightly
+          durationInSeconds = lastWord.end + 1.0; 
+        }
+        
+        const MathCeil = Math.ceil;
+        const durationInFrames = MathCeil(durationInSeconds * FPS);
+
+        finalScenes.push({
+          scene_id: asset.scene_number,
+          startFrame: globalStartFrame,
+          durationInFrames,
+          type,
+          image_url: asset.image_url,
+          wan_video_url: wanVideoUrl,
+          voiceover_url: asset.voice_url,
+          captions: asset.captions_json
+        });
+
+        globalStartFrame += durationInFrames;
+      }
+      
+      return { scenes: finalScenes, totalDurationInFrames: globalStartFrame };
+    });
+
+    // 4. Trigger Remotion Lambda
+    const renderData = await step.run("trigger-remotion-lambda", async () => {
+      // Lazy load Lambda Client
+      const { renderMediaOnLambda, getRenderProgress } = await import("@remotion/lambda/client");
+      
+      const region = process.env.REMOTION_AWS_REGION || "us-east-1";
+      const functionName = process.env.REMOTION_FUNCTION_NAME || "remotion-render-function";
+      const serveUrl = process.env.REMOTION_SERVE_URL;
+
+      if (!serveUrl || !process.env.AWS_ACCESS_KEY_ID) {
+         console.warn("AWS / Remotion environment variables are missing. Rendering will fail if not configured.");
+      }
+
+      console.log('Initiating Lambda Render...', {
+        region, functionName, serveUrl
+      });
+      
+      const { renderId, bucketName } = await renderMediaOnLambda({
+        region: region as any,
+        functionName,
+        serveUrl: serveUrl as string,
+        composition: "MainComposition",
+        inputProps: processedData,
+        codec: "h264",
+        imageFormat: "jpeg",
+        maxRetries: 1,
+        privacy: "public",
+      });
+
+      console.log('Lambda Render Started:', renderId);
+
+      // Poll Progress
+      let finalUrl: string | null = null;
+      // Safety limit of 120 polling iterations (10 minutes max assuming 5s breaks)
+      for (let attempt = 0; attempt < 120; attempt++) {
+        const progress = await getRenderProgress({ 
+          renderId, 
+          bucketName, 
+          functionName, 
+          region: region as any 
+        });
+        
+        if (progress.done && progress.outputFile) {
+          finalUrl = progress.outputFile;
+          break;
+        }
+        
+        if (progress.fatalErrorEncountered) {
+          throw new Error("Remotion Lambda Rendering failed: " + progress.errors[0]?.message);
+        }
+        
+        // Wait 5 seconds before checking again
+        await new Promise(r => setTimeout(r, 5000));
+      }
+
+      if (!finalUrl) {
+         throw new Error("Render timed out waiting for progress");
+      }
+
+      return { finalUrl };
+    });
+
+    // 5. Mark status as "completed" and save URL
+    await step.run("update-status-to-completed", async () => {
+      const supabase = createAdminClient();
+      await supabase
+        .from('videos')
+        .update({ 
+          status: 'completed',
+          // Note: If 'video_url' is the correct column name in your database.
+          // Fallback to storing in metadata or elsewhere if the schema is different
+          video_url: renderData.finalUrl 
+        })
+        .eq('id', event.data.videoId);
+    });
+
+    // 6. Send email notification via Plunk
+    await step.run("send-email-notification", async () => {
+      const supabase = createAdminClient();
+      
+      // Get video details & series details
+      const { data: videoData } = await supabase
+        .from('videos')
+        .select(`
+          id, title, status, video_url, series_id,
+          video_assets (
+            image_url
+          )
+        `)
+        .eq('id', event.data.videoId)
+        .single();
+        
+      if (!videoData) return;
+      
+      const { data: seriesData } = await supabase
+        .from('series')
+        .select('user_id')
+        .eq('id', videoData.series_id)
+        .single();
+        
+      if (!seriesData?.user_id) return;
+      
+      // Get user email using Clerk backend SDK
+      const { createClerkClient } = await import('@clerk/nextjs/server');
+      const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+      const user = await clerkClient.users.getUser(seriesData.user_id);
+      const email = user.emailAddresses[0]?.emailAddress;
+      
+      if (!email) return;
+
+      // Extract thumbnail
+      const thumbnailInfo = videoData.video_assets?.find((a: any) => a.image_url) || videoData.video_assets?.[0];
+      const thumbnailUrl = thumbnailInfo?.image_url || 'https://via.placeholder.com/600x400?text=Video+Thumbnail';
+      const videoUrl = videoData.video_url || renderData.finalUrl;
+      const downloadUrl = `${videoUrl}?download=true`;
+      
+      // Need a proper deployment URL for dashboard if possible, otherwise generic
+      const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/videos` : 'https://vigen.app/dashboard/videos';
+
+      // HTML template with modern premium styling (dark theme, gradients, clean UI)
+      const htmlBody = `
+        <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #030712; border: 1px solid #1f2937; border-radius: 16px; overflow: hidden; color: #f9fafb;">
+          <div style="background: linear-gradient(135deg, #8b5cf6, #3b82f6); padding: 40px 24px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">Your Video is Ready! 🎉</h1>
+            <p style="color: rgba(255,255,255,0.9); margin-top: 10px; font-size: 16px;">The AI pipeline has successfully rendered your content.</p>
+          </div>
+          <div style="padding: 32px 24px; text-align: center;">
+            <h2 style="font-size: 20px; font-weight: 600; margin-bottom: 24px; color: #f9fafb;">
+              "${videoData.title || 'Untitled Video'}"
+            </h2>
+            
+            <div style="margin-bottom: 32px; border-radius: 12px; overflow: hidden; border: 1px solid #1f2937; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); background-color: #111827;">
+               <img src="${thumbnailUrl}" alt="${videoData.title || 'Video'} Thumbnail" style="width: 100%; max-height: 400px; display: block; object-fit: contain;" />
+            </div>
+            
+            <p style="font-size: 16px; line-height: 1.5; color: #9ca3af; margin-bottom: 32px;">
+              Your high-quality video is now ready. You can download it directly or view it in your dashboard gallery.
+            </p>
+
+            <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
+               <a href="${dashboardUrl}" style="background: linear-gradient(to right, #8b5cf6, #3b82f6); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; flex: 1; min-width: 150px; max-width: 200px; text-align: center; box-shadow: 0 4px 6px -1px rgba(139, 92, 246, 0.3);">View Gallery</a>
+               <a href="${downloadUrl}" style="background-color: #1f2937; color: #f9fafb; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; border: 1px solid #374151; flex: 1; min-width: 150px; max-width: 200px; text-align: center;">Download Video</a>
+            </div>
+          </div>
+          <div style="background-color: #111827; padding: 20px; text-align: center; font-size: 13px; color: #6b7280; border-top: 1px solid #1f2937;">
+            <p style="margin: 0;">© ${new Date().getFullYear()} ViGen AI. All rights reserved.</p>
+          </div>
+        </div>
+      `;
+
+      if (process.env.PLUNK_API_KEY) {
+        try {
+          const response = await fetch('https://api.useplunk.com/v1/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.PLUNK_API_KEY}`
+            },
+            body: JSON.stringify({
+              to: email,
+              subject: 'Your AI Video is Ready! 🎉',
+              body: htmlBody
+            })
+          });
+          
+          if (!response.ok) {
+             const errorText = await response.text();
+             console.error("Plunk email error:", errorText);
+             throw new Error(`Failed to send email: ${errorText}`);
+          } else {
+             console.log(`Successfully sent notification email to ${email}`);
+          }
+        } catch (e) {
+          console.error("Exception sending plunk email:", e);
+          // Non-fatal, just log
+        }
+      } else {
+        console.log("No PLUNK_API_KEY provided in env variables. Skipping email notification.");
+      }
+    });
+
+    return { 
+      success: true, 
+      message: "Final video generation completed", 
+      finalUrl: renderData.finalUrl 
+    };
+  }
+);
+
