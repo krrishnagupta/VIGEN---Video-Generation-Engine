@@ -60,7 +60,7 @@ export default function ReviewPage() {
     // Setup polling if the video is still generating
     const interval = setInterval(() => {
       setVideo((prev) => {
-        if (prev?.status === 'generating') {
+        if (prev?.status === 'generating' || prev?.status === 'generating_video') {
           fetchReviewData(false); // fetch without showing main loading spinner
         }
         return prev;
@@ -70,10 +70,22 @@ export default function ReviewPage() {
     return () => clearInterval(interval);
   }, [videoId]);
 
+  useEffect(() => {
+     if (video?.status === 'completed') {
+        router.push("/dashboard/videos");
+     }
+  }, [video?.status, router]);
+
   const fetchReviewData = async (showLoader = true) => {
     try {
       if (showLoader) setLoading(true);
-      const res = await fetch(`/api/videos/${videoId}/review`);
+      const res = await fetch(`/api/videos/${videoId}/review?t=${Date.now()}`, { 
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      });
       const data = await res.json();
       if (data.success) {
         setVideo(data.data);
@@ -246,13 +258,13 @@ export default function ReviewPage() {
       const data = await res.json();
       if (data.success) {
         toast.success("Video Approved! Starting Final Render Pipeline.");
-        router.push("/dashboard/videos");
+        setVideo((prev) => prev ? { ...prev, status: 'generating_video' } : prev);
       } else {
         toast.error(data.error || "Failed to approve video");
+        setIsSaving(false);
       }
     } catch (err) {
       toast.error("Error approving video");
-    } finally {
       setIsSaving(false);
     }
   };
@@ -296,7 +308,43 @@ export default function ReviewPage() {
     );
   }
 
-  const currentScene = video.video_assets.find(a => a.scene_number === activeScene);
+  // If we have video data but it's rendering the final video
+  if (video && video.status === 'generating_video') {
+    return (
+      <div className="h-[calc(100vh-8rem)] flex flex-col items-center justify-center -mx-4 -mt-4 bg-zinc-50/50">
+        <div className="max-w-md w-full bg-white p-8 rounded-3xl border border-zinc-200 shadow-xl text-center space-y-6 animate-in fade-in zoom-in-95 duration-500">
+          <div className="mx-auto w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center relative">
+            <Loader2 className="w-10 h-10 text-blue-600 animate-spin relative z-10" />
+            <div className="absolute inset-0 border-4 border-t-blue-600 border-r-blue-300 border-b-blue-100 border-l-blue-50 rounded-full animate-spin [animation-duration:2s]"></div>
+          </div>
+          
+          <div>
+            <h2 className="text-2xl font-bold text-zinc-900 tracking-tight">Video is on the way...</h2>
+            <p className="text-zinc-500 mt-2 font-medium text-sm leading-relaxed">
+              We are assembling your scenes, applying the voiceover, and rendering the final HD video. This may take a couple of minutes.
+            </p>
+          </div>
+
+          <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 flex items-center gap-3 text-left">
+            <Wand2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <p className="text-xs text-zinc-600 font-semibold">
+              Please don't close this page. You will be automatically redirected to your gallery once it's ready!
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!video) {
+    return (
+      <div className="flex justify-center items-center py-32 text-zinc-500">
+        Video not found or failed to load.
+      </div>
+    );
+  }
+
+  const currentScene = video.video_assets?.find(a => a.scene_number === activeScene);
   const isScriptModified = currentScene && currentScene.script_text !== localScriptText;
 
   return (
@@ -337,12 +385,12 @@ export default function ReviewPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar - Scene List */}
         <div className="w-80 bg-white border-r border-zinc-200 flex flex-col h-full z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)] relative">
-          <div className="p-4 border-b border-zinc-100 bg-zinc-50/80 backdrop-blur-md">
-             <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1">Scenes ({video.video_assets.length})</h2>
+           <div className="p-4 border-b border-zinc-100 bg-zinc-50/80 backdrop-blur-md">
+             <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1">Scenes ({video.video_assets?.length || 0})</h2>
              <p className="text-xs text-zinc-500 leading-relaxed font-medium">Select a scene to review its specific text & visual.</p>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2 relative">
-            {video.video_assets.map((asset) => (
+            {video.video_assets?.map((asset) => (
               <button
                 key={asset.id}
                 onClick={() => handleSceneChange(asset.scene_number)}

@@ -2,7 +2,13 @@
 
 import { useEffect, useState, useRef } from "react";
 import { VIDEO_STYLES } from "@/lib/constants/video-style-data";
-import { MoreVertical, Edit2, Play, Calendar, PlayCircle, Eye, Pause, Trash2, Loader2 } from "lucide-react";
+import { MoreVertical, Edit2, Play, Calendar, PlayCircle, Eye, Pause, Trash2, Loader2, Youtube, Instagram } from "lucide-react";
+
+const TikTokIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0" className={className}>
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+  </svg>
+);
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -13,6 +19,7 @@ interface Series {
   video_style_id: string;
   status: string;
   created_at: string;
+  platforms?: string[];
 }
 
 export function SeriesList() {
@@ -145,10 +152,21 @@ export function SeriesList() {
                 <Edit2 className="w-4 h-4" />
               </Link>
 
-              <div className="absolute bottom-3 left-4">
+              <div className="absolute bottom-3 left-4 flex items-center gap-2">
                 <span className="px-2.5 py-1 rounded-md bg-black/40 backdrop-blur-md text-white text-xs font-medium border border-white/10 capitalize">
                   {series.status || 'Active'}
                 </span>
+                
+                {series.platforms && series.platforms.length > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    {series.platforms.map(p => {
+                      if (p === 'youtube') return <div key={p} className="w-6 h-6 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white border border-white/10"><Youtube className="w-3 h-3" /></div>;
+                      if (p === 'instagram') return <div key={p} className="w-6 h-6 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white border border-white/10"><Instagram className="w-3 h-3" /></div>;
+                      if (p === 'tiktok') return <div key={p} className="w-6 h-6 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-md text-white border border-white/10"><TikTokIcon className="w-3 h-3" /></div>;
+                      return null;
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 

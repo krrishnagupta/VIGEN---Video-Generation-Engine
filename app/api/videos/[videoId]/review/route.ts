@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 import { inngest } from "@/lib/inngest/client";
 
 export async function GET(req: Request, { params }: { params: Promise<{ videoId: string }> }) {
@@ -11,7 +12,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ videoId:
     }
 
     const { videoId } = await params;
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     const { data: videoData, error: videoError } = await supabase
       .from('videos')
@@ -23,12 +24,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ videoId:
       .eq('id', videoId)
       .single()
 
-    if (videoError || !videoData) {
+    if (videoError || !videoData || videoData.series?.user_id !== userId) {
       return NextResponse.json({ error: videoError?.message || 'Video not found' }, { status: 404 })
     }
 
     // Sort assets by scene number
-    videoData.video_assets.sort((a: any, b: any) => a.scene_number - b.scene_number);
+    if (videoData.video_assets && Array.isArray(videoData.video_assets)) {
+      videoData.video_assets.sort((a: any, b: any) => a.scene_number - b.scene_number);
+    }
 
     return NextResponse.json({ success: true, data: videoData })
   } catch (error: any) {

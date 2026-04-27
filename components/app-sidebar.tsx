@@ -42,12 +42,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar variant="sidebar" className="border-r border-zinc-200 bg-white" {...props}>
       <SidebarHeader className="p-4">
-        <div className="flex items-center gap-1 px-2">
+        <Link href="/" className="flex items-center gap-1 px-2 hover:opacity-80 transition-opacity">
           <div className="relative w-8 h-8 overflow-hidden rounded-lg">
             <Image src="/VIGEN_Icon.png" alt="VIGEN Logo" className="object-contain" fill sizes="32px" />
           </div>
           <span className="text-xl font-bold tracking-tight text-zinc-900">VIGEN</span>
-        </div>
+        </Link>
         <div className="mt-6 px-2">
           <Link href="/dashboard/create" className="block w-full">
             <Button variant="default" className="w-full justify-start gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 text-white font-medium h-11 rounded-xl shadow-sm">
@@ -111,13 +111,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton
               asChild
               size="lg"
-              isActive={pathname?.startsWith("/dashboard/settings")}
-              className={`transition-all my-1 px-4 border ${pathname?.startsWith("/dashboard/settings")
+              isActive={pathname?.startsWith("/dashboard/profile")}
+              className={`transition-all my-1 px-4 border ${pathname?.startsWith("/dashboard/profile")
                 ? "border-violet-900 bg-violet-100 text-zinc-900 font-semibold shadow-sm"
                 : "border-transparent text-zinc-600 hover:bg-violet-100 hover:border-violet-200 hover:text-violet-900"
                 }`}
             >
-              <Link href="/dashboard/settings">
+              <Link href="/dashboard/profile">
                 <User className="h-5 w-5 mr-3" />
                 <span className="text-base font-medium">Profile Setting</span>
               </Link>
