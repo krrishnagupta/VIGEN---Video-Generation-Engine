@@ -26,7 +26,7 @@ Whether you are a content creator, marketer, or agency, VIGEN puts your video co
 
 <div align="center">
   <!-- Note: Replace the URL below with a real screenshot or GIF of the dashboard once available -->
-  <img src="vigen\public\Screenshot-1.png" alt="Dashboard Preview" width="100%" />
+  <img src="public/Screenshot-1.png" alt="Dashboard Preview" width="100%" />
 </div>
 
 ---
