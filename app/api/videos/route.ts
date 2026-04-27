@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
-import { createClient } from '@/utils/supabase/server'
+import { createAdminClient as createClient } from '@/utils/supabase/admin'
 
 export async function GET(req: Request) {
   try {
@@ -10,7 +10,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    const supabase = createClient()
 
     // 1. Fetch user's series
     const { data: userSeries, error: seriesError } = await supabase

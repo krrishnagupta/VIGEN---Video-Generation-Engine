@@ -65,11 +65,11 @@ const PLATFORMS = [
     bg: "bg-white border-[#E1306C]/20"
   },
   {
-    id: "export",
-    name: "Export / Share",
-    icon: <Share className="h-6 w-6 text-emerald-500" />,
-    color: "group-hover:ring-emerald-500",
-    bg: "bg-white border-emerald-500/20"
+    id: "email",
+    name: "Email",
+    icon: <Mail className="h-6 w-6 text-blue-500" />,
+    color: "group-hover:ring-blue-500",
+    bg: "bg-white border-blue-500/20"
   }
 ]
 
@@ -175,30 +175,6 @@ export function SeriesDetails({
                   )}
                 </button>
               )
-
-              if (platform.id === "export") {
-                return (
-                  <DropdownMenu key={platform.id}>
-                    <DropdownMenuTrigger asChild>
-                      {buttonContent}
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-48 rounded-xl border-zinc-100 shadow-xl p-2" align="center">
-                      <DropdownMenuItem className="flex items-center gap-2 cursor-pointer font-medium p-2 text-zinc-700 hover:bg-zinc-50 rounded-lg outline-none">
-                        <MessageCircle className="h-4 w-4 text-green-500" />
-                        WhatsApp
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="flex items-center gap-2 cursor-pointer font-medium p-2 text-zinc-700 hover:bg-zinc-50 rounded-lg outline-none">
-                        <Download className="h-4 w-4 text-purple-500" />
-                        Download Video
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="flex items-center gap-2 cursor-pointer font-medium p-2 text-zinc-700 hover:bg-zinc-50 rounded-lg outline-none">
-                        <Mail className="h-4 w-4 text-blue-500" />
-                        Email
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )
-              }
 
               return buttonContent
             })}

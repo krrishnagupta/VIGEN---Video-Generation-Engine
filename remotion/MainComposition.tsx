@@ -13,9 +13,7 @@ export type SceneData = {
   scene_id: number;
   startFrame: number;
   durationInFrames: number;
-  type: 'wan' | 'fallback';
   image_url: string;
-  wan_video_url?: string;
   voiceover_url?: string;
   captions?: CaptionWord[];
 };

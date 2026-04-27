@@ -14,7 +14,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ videoI
     const { action, scene_number, prompt, image_base64, series_id } = body;
 
     const supabase = await createClient();
-    let imageBuffer: ArrayBuffer;
+    let imageBuffer: ArrayBuffer | Buffer;
 
     if (action === 'generate') {
       if (!prompt) throw new Error("Prompt is required for generation");

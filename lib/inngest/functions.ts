@@ -16,7 +16,17 @@ export const helloWorld = inngest.createFunction(
 );
 
 export const generateVideo = inngest.createFunction(
-  { id: "generate-video", triggers: [{ event: "video/generate" }] },
+  { 
+    id: "generate-video", 
+    triggers: [{ event: "video/generate" }],
+    onFailure: async ({ event, error }) => {
+      const supabase = createAdminClient();
+      const videoId = event.data.event.data.videoId;
+      if (videoId) {
+        await supabase.from('videos').update({ status: 'failed' }).eq('id', videoId);
+      }
+    }
+  },
   async ({ event, step }) => {
     // 1. Fetch Series data from supabase
     const seriesData = await step.run("fetch-series-data", async () => {
@@ -33,7 +43,7 @@ export const generateVideo = inngest.createFunction(
       return data;
     });
 
-    // 2. Generate Video Script using AI
+    
     // 2. Generate Video Script using AI
     const scriptData = await step.run("generate-video-script", async () => {
       let imagePromptCountInstruction = '5-6 scenes';
@@ -125,7 +135,7 @@ Return ONLY JSON. No extra text under any condition.`;
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}` },
           body: JSON.stringify({
-            model: "mistralai/mistral-7b-instruct",
+            model: "openai/gpt-4o-mini",
             messages: [{ role: "user", content: systemPrompt }],
             response_format: { type: "json_object" }
           })
@@ -135,23 +145,27 @@ Return ONLY JSON. No extra text under any condition.`;
         return extractJson(data.choices[0].message.content);
       };
 
+      let lastGeminiError: any;
       // 1. Try Gemini (with 1 retry, so 2 attempts total)
       for (let i = 0; i < 2; i++) {
         try {
           return await tryGemini();
-        } catch (e) {
+        } catch (e: any) {
+          lastGeminiError = e;
           console.error(`Gemini attempt ${i + 1} failed:`, e);
         }
       }
 
+      let lastOpenRouterError: any;
       // 2. Try OpenRouter (1 attempt)
       try {
         return await tryOpenRouter();
-      } catch (e) {
+      } catch (e: any) {
+        lastOpenRouterError = e;
         console.error("OpenRouter fallback failed:", e);
       }
 
-      throw new Error("All models failed to generate video script.");
+      throw new Error(`All models failed to generate video script. Gemini Error: ${lastGeminiError?.message || "Unknown"}. OpenRouter Error: ${lastOpenRouterError?.message || "Unknown"}`);
     });
 
     // 3. Generate Voice using TTS model
@@ -405,7 +419,34 @@ Return ONLY JSON. No extra text under any condition.`;
     const saveResult = await step.run("save-to-database", async () => {
       const supabase = createAdminClient();
       
-      // 1. Update the main video record linked to the series
+      // 1. Prepare the relational assets for each scene
+      const assetsToInsert = scriptData.scenes.map((scene: any) => {
+        const sceneAudio = voiceData.audios.find((a: any) => a.scene === scene.scene);
+        const sceneImage = imageData.images.find((i: any) => i.scene === scene.scene);
+        const sceneCaption = captionData.captions.find((c: any) => c.scene === scene.scene);
+
+        return {
+          video_id: event.data.videoId,
+          scene_number: scene.scene,
+          script_text: scene.voiceover,
+          voice_url: sceneAudio ? sceneAudio.audioUrl : null,
+          image_url: sceneImage ? sceneImage.imageUrl : null,
+          captions_json: sceneCaption ? sceneCaption.captions : null
+        };
+      });
+
+      // 2. Bulk insert the assets
+      if (assetsToInsert.length > 0) {
+        const { error: assetsError } = await supabase
+          .from('video_assets')
+          .insert(assetsToInsert);
+
+        if (assetsError) {
+          throw new Error(`Failed to save video assets: ${assetsError.message}`);
+        }
+      }
+
+      // 3. Update the main video record linked to the series
       const { data: videoData, error: videoError } = await supabase
         .from('videos')
         .update({
@@ -418,33 +459,6 @@ Return ONLY JSON. No extra text under any condition.`;
         
       if (videoError || !videoData) {
         throw new Error(`Failed to save video record: ${videoError?.message}`);
-      }
-
-      // 2. Prepare the relational assets for each scene
-      const assetsToInsert = scriptData.scenes.map((scene: any) => {
-        const sceneAudio = voiceData.audios.find((a: any) => a.scene === scene.scene);
-        const sceneImage = imageData.images.find((i: any) => i.scene === scene.scene);
-        const sceneCaption = captionData.captions.find((c: any) => c.scene === scene.scene);
-
-        return {
-          video_id: videoData.id,
-          scene_number: scene.scene,
-          script_text: scene.voiceover,
-          voice_url: sceneAudio ? sceneAudio.audioUrl : null,
-          image_url: sceneImage ? sceneImage.imageUrl : null,
-          captions_json: sceneCaption ? sceneCaption.captions : null
-        };
-      });
-
-      // 3. Bulk insert the assets
-      if (assetsToInsert.length > 0) {
-        const { error: assetsError } = await supabase
-          .from('video_assets')
-          .insert(assetsToInsert);
-
-        if (assetsError) {
-          throw new Error(`Failed to save video assets: ${assetsError.message}`);
-        }
       }
       
       return { success: true, savedVideoId: videoData.id };
@@ -459,7 +473,18 @@ Return ONLY JSON. No extra text under any condition.`;
 );
 
 export const generateFinalVideo = inngest.createFunction(
-  { id: "generate-final-video", triggers: [{ event: "video/generate-final" }] },
+  {
+    id: "generate-final-video", 
+    concurrency: { limit: 1, },
+    triggers: [{ event: "video/generate-final" }],
+    onFailure: async ({ event, error }) => {
+      const supabase = createAdminClient();
+      const videoId = event.data.event.data.videoId;
+      if (videoId) {
+        await supabase.from('videos').update({ status: 'failed' }).eq('id', videoId);
+      }
+    }
+  },
   async ({ event, step }) => {
     // 1. Mark status as "generating_video"
     await step.run("update-status-to-generating", async () => {
@@ -483,62 +508,14 @@ export const generateFinalVideo = inngest.createFunction(
       return data;
     });
 
-    // 3. Process WAN generation
-    const processedData = await step.run("process-wan-generation", async () => {
-      const supabase = createAdminClient();
-      const Replicate = (await import('replicate')).default;
-      const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
-
+    // 3. Process video scenes
+    const processedData = await step.run("process-video-scenes", async () => {
       const finalScenes = [];
       const FPS = 30;
       let globalStartFrame = 0;
 
       for (let i = 0; i < assets.length; i++) {
         const asset = assets[i];
-        
-        let type = 'fallback';
-        let wanVideoUrl: string | null = null;
-
-        // Select scenes for WAN (e.g., alternating scenes starting with the first one)
-        const shouldUseWan = i % 2 === 0;
-
-        if (shouldUseWan && asset.image_url) {
-          try {
-            console.log(`Generating WAN video for scene ${asset.scene_number}`);
-            
-            // Generate video via Replicate using the specified model and options
-            const output: any = await replicate.run(
-              "wan-video/wan-2.2-i2v-fast",
-              {
-                input: {
-                  image: asset.image_url,
-                  prompt: asset.script_text || "Cinematic motion scene",
-                  variant: "base",
-                  target_resolution: "480"
-                }
-              }
-            );
-            
-            const videoUrl = Array.isArray(output) ? output[0] : output;
-            
-            if (typeof videoUrl === 'string') {
-              // Upload to Supabase Storage
-              const res = await fetch(videoUrl);
-              const buffer = await res.arrayBuffer();
-              const fileName = `final/${event.data.videoId}/scene-${asset.scene_number}-wan-${Date.now()}.mp4`;
-              
-              await supabase.storage.from('series_assets').upload(fileName, buffer, { contentType: 'video/mp4' });
-              
-              const { data: publicUrlData } = supabase.storage.from('series_assets').getPublicUrl(fileName);
-              wanVideoUrl = publicUrlData.publicUrl;
-              type = 'wan';
-              console.log(`WAN video success: ${wanVideoUrl}`);
-            }
-          } catch (error) {
-            console.error(`WAN generation failed for scene ${asset.scene_number}`, error);
-            type = 'fallback'; 
-          }
-        }
         
         // Calculate scene duration. Find audio duration using captions, or fallback to 5s
         let durationInSeconds = 5;
@@ -556,9 +533,7 @@ export const generateFinalVideo = inngest.createFunction(
           scene_id: asset.scene_number,
           startFrame: globalStartFrame,
           durationInFrames,
-          type,
           image_url: asset.image_url,
-          wan_video_url: wanVideoUrl,
           voiceover_url: asset.voice_url,
           captions: asset.captions_json
         });
@@ -570,22 +545,34 @@ export const generateFinalVideo = inngest.createFunction(
     });
 
     // 4. Trigger Remotion Lambda
-    const renderData = await step.run("trigger-remotion-lambda", async () => {
-      // Lazy load Lambda Client
-      const { renderMediaOnLambda, getRenderProgress } = await import("@remotion/lambda/client");
-      
-      const region = process.env.REMOTION_AWS_REGION || "us-east-1";
-      const functionName = process.env.REMOTION_FUNCTION_NAME || "remotion-render-function";
-      const serveUrl = process.env.REMOTION_SERVE_URL;
+const renderData = await step.run("trigger-remotion-lambda", async () => {
+  // Lazy load Lambda Client
+  const { renderMediaOnLambda } = await import("@remotion/lambda/client");
+  
+  // NOTE: If you are switching regions to bypass zombies, update your .env file
+  // or temporarily hardcode this to "us-east-2"
+  const region = process.env.REMOTION_AWS_REGION || "us-east-2";
+  const functionName = process.env.REMOTION_FUNCTION_NAME || "remotion-render-4-0-448-mem2048mb-disk2048mb-120sec";
+  const serveUrl = process.env.REMOTION_SERVE_URL;
 
-      if (!serveUrl || !process.env.AWS_ACCESS_KEY_ID) {
-         console.warn("AWS / Remotion environment variables are missing. Rendering will fail if not configured.");
-      }
+  if (!serveUrl || !process.env.AWS_ACCESS_KEY_ID) {
+     console.warn("AWS / Remotion environment variables are missing. Rendering will fail if not configured.");
+  }
 
-      console.log('Initiating Lambda Render...', {
-        region, functionName, serveUrl
-      });
+  console.log('Initiating Lambda Render...', { region, functionName, serveUrl });
+
+  // --- DYNAMIC FRAMES PER LAMBDA FORMULA ---
+      // 1. Get the total frames directly from processedData
+      const totalFrames = processedData.totalDurationInFrames || (45 * 30);
       
+      // 2. Force it to use exactly 8 Lambdas (leaving 2 as a safety buffer for AWS)
+      const targetLambdas = 7;
+      
+      // 5. Calculate framesPerLambda. 
+      // We MUST use Math.ceil() to round up. If we round down, it might accidentally spawn a 9th Lambda!
+      const dynamicFramesPerLambda = Math.ceil(totalFrames / targetLambdas);
+      // -----------------------------------------
+
       const { renderId, bucketName } = await renderMediaOnLambda({
         region: region as any,
         functionName,
@@ -594,62 +581,89 @@ export const generateFinalVideo = inngest.createFunction(
         inputProps: processedData,
         codec: "h264",
         imageFormat: "jpeg",
-        maxRetries: 1,
+        maxRetries: 2,
         privacy: "public",
+        
+        // Plug the dynamic formula variable in here!
+        framesPerLambda: dynamicFramesPerLambda, 
       });
 
-      console.log('Lambda Render Started:', renderId);
+  console.log('Lambda Render Started:', renderId);
+  
+  // Return these values so we can use them in the next steps safely
+  return { renderId, bucketName, region, functionName };
+});
 
-      // Poll Progress
-      let finalUrl: string | null = null;
-      // Safety limit of 120 polling iterations (10 minutes max assuming 5s breaks)
-      for (let attempt = 0; attempt < 120; attempt++) {
-        const progress = await getRenderProgress({ 
-          renderId, 
-          bucketName, 
-          functionName, 
-          region: region as any 
-        });
-        
-        if (progress.done && progress.outputFile) {
-          finalUrl = progress.outputFile;
-          break;
-        }
-        
-        if (progress.fatalErrorEncountered) {
-          throw new Error("Remotion Lambda Rendering failed: " + progress.errors[0]?.message);
-        }
-        
-        // Wait 5 seconds before checking again
-        await new Promise(r => setTimeout(r, 5000));
+
+// 4.5 Poll Progress Safely using Inngest (OUTSIDE of the previous step)
+let finalUrl: string | null = null;
+
+for (let attempt = 0; attempt < 120; attempt++) {
+  // Use Inngest's step.sleep. This safely pauses the function so Next.js doesn't time out!
+  await step.sleep(`wait-for-render-progress-${attempt}`, "12s");
+
+  const progress = await step.run(`check-progress-${attempt}`, async () => {
+    const { getRenderProgress } = await import("@remotion/lambda/client");
+    
+    try {
+      return await getRenderProgress({ 
+        renderId: renderData.renderId, 
+        bucketName: renderData.bucketName, 
+        functionName: renderData.functionName, 
+        region: renderData.region as any 
+      });
+    } catch (err: any) {
+      if (err.name === 'TooManyRequestsException' || err.message?.includes('Rate Exceeded')) {
+        console.warn(`Rate limit exceeded during getRenderProgress on attempt ${attempt}.`);
+        return null; // Return null so we can handle the retry on the next loop
       }
+      throw err;
+    }
+  });
 
-      if (!finalUrl) {
-         throw new Error("Render timed out waiting for progress");
-      }
+  // If we hit a rate limit on checking progress, skip to the next loop iteration
+  if (!progress) continue; 
+  
+  if (progress.done && progress.outputFile) {
+    finalUrl = progress.outputFile;
+    break;
+  }
+  
+  if (progress.fatalErrorEncountered) {
+    throw new Error("Remotion Lambda Rendering failed: " + progress.errors[0]?.message);
+  }
+}
 
-      return { finalUrl };
-    });
+if (!finalUrl) {
+   throw new Error("Render timed out waiting for progress");
+}
 
-    // 5. Mark status as "completed" and save URL
-    await step.run("update-status-to-completed", async () => {
-      const supabase = createAdminClient();
-      await supabase
-        .from('videos')
-        .update({ 
-          status: 'completed',
-          // Note: If 'video_url' is the correct column name in your database.
-          // Fallback to storing in metadata or elsewhere if the schema is different
-          video_url: renderData.finalUrl 
-        })
-        .eq('id', event.data.videoId);
-    });
 
-    // 6. Send email notification via Plunk
-    await step.run("send-email-notification", async () => {
+// 5. Mark status as "completed" and save URL
+const updateData = await step.run("update-status-to-completed", async () => {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from('videos')
+    .update({ 
+      status: 'completed',
+      video_url: finalUrl // Use the variable from the polling loop
+    })
+    .eq('id', event.data.videoId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Failed to update video status in Supabase:", error);
+    throw new Error(`Failed to update video status: ${error.message}`);
+  }
+
+  return { updated: true, finalUrl, data };
+});
+
+    // 7. Publish to selected platforms & send Plunk email
+    await step.run("publish-to-platforms", async () => {
       const supabase = createAdminClient();
       
-      // Get video details & series details
       const { data: videoData } = await supabase
         .from('videos')
         .select(`
@@ -665,11 +679,12 @@ export const generateFinalVideo = inngest.createFunction(
       
       const { data: seriesData } = await supabase
         .from('series')
-        .select('user_id')
+        .select('user_id, platforms')
         .eq('id', videoData.series_id)
         .single();
         
       if (!seriesData?.user_id) return;
+      const platforms = seriesData.platforms || [];
       
       // Get user email using Clerk backend SDK
       const { createClerkClient } = await import('@clerk/nextjs/server');
@@ -682,7 +697,7 @@ export const generateFinalVideo = inngest.createFunction(
       // Extract thumbnail
       const thumbnailInfo = videoData.video_assets?.find((a: any) => a.image_url) || videoData.video_assets?.[0];
       const thumbnailUrl = thumbnailInfo?.image_url || 'https://via.placeholder.com/600x400?text=Video+Thumbnail';
-      const videoUrl = videoData.video_url || renderData.finalUrl;
+      const videoUrl = videoData.video_url || updateData.finalUrl;
       const downloadUrl = `${videoUrl}?download=true`;
       
       // Need a proper deployment URL for dashboard if possible, otherwise generic
@@ -719,7 +734,11 @@ export const generateFinalVideo = inngest.createFunction(
         </div>
       `;
 
-      if (process.env.PLUNK_API_KEY) {
+      if (platforms.includes('youtube')) console.log("PLACEHOLDER: Uploading to YouTube...");
+      if (platforms.includes('instagram')) console.log("PLACEHOLDER: Uploading to Instagram Reels...");
+      if (platforms.includes('tiktok')) console.log("PLACEHOLDER: Uploading to TikTok...");
+
+      if (platforms.includes('email') && process.env.PLUNK_API_KEY) {
         try {
           const response = await fetch('https://api.useplunk.com/v1/send', {
             method: 'POST',
@@ -753,8 +772,65 @@ export const generateFinalVideo = inngest.createFunction(
     return { 
       success: true, 
       message: "Final video generation completed", 
-      finalUrl: renderData.finalUrl 
+      finalUrl: updateData.finalUrl 
     };
+  }
+);
+
+export const scheduleDailyVideoGeneration = inngest.createFunction(
+  { 
+    id: "schedule-daily-video-generation",
+    triggers: [{ cron: "0 * * * *" }] // Runs exactly at the top of every hour
+  },
+  async ({ step }) => {
+    const activeSeriesIds = await step.run("fetch-active-series", async () => {
+      const supabase = createAdminClient();
+      const { data, error } = await supabase
+        .from('series')
+        .select('id, publish_time')
+        .eq('status', 'active');
+        
+      if (error || !data) return [];
+      
+      const now = new Date();
+      // Calculate target hour (current hour + 2 hours ahead)
+      const targetGenerateHour = (now.getHours() + 2) % 24; 
+      
+      return data.filter((s: any) => {
+         if (!s.publish_time) return false;
+         try {
+           const pt = new Date(s.publish_time);
+           return pt.getHours() === targetGenerateHour; // Trigger generation 2 hours before
+         } catch(e) {
+           return false;
+         }
+      }).map((s: any) => s.id);
+    });
+
+    const jobs = activeSeriesIds.map((seriesId: string) => 
+      step.run(`trigger-generation-${seriesId}`, async () => {
+         const supabase = createAdminClient();
+         const { data: videoData } = await supabase
+           .from('videos')
+           .insert([{ series_id: seriesId, status: 'scheduled' }])
+           .select()
+           .single();
+
+         if (videoData) {
+            const { inngest: inngestSender } = await import('@/lib/inngest/client');
+            await inngestSender.send({
+               name: "video/generate",
+               data: { seriesId, videoId: videoData.id, isTest: false }
+            });
+         }
+      })
+    );
+
+    if (jobs.length > 0) {
+       await Promise.all(jobs);
+    }
+    
+    return { generatedCount: jobs.length };
   }
 );
 
